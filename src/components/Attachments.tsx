@@ -13,7 +13,7 @@ import { errorMessage } from '../utils/errors';
 import { Button, Chip, Field, FormModal, Icon, Notice } from './ui';
 import { DateField } from './DateField';
 
-export function Attachments({ orderId, ownerUid }: { orderId: string; ownerUid: string }) {
+export function Attachments({ orderId, ownerUid, readOnly = false }: { orderId: string; ownerUid: string; readOnly?: boolean }) {
   const { user } = useAuth();
   const [items, setItems] = useState<Attachment[]>([]), [error, setError] = useState('');
   const [open, setOpen] = useState(false), [busy, setBusy] = useState(false);
@@ -62,14 +62,14 @@ export function Attachments({ orderId, ownerUid }: { orderId: string; ownerUid: 
   }
   return <View style={shared.card}>
     <Text style={shared.heading}>Fotos e notas fiscais</Text>
-    <Text style={shared.muted}>Guarde os registros do reparo e os comprovantes deste serviço.</Text>
+    <Text style={shared.muted}>{readOnly ? 'Registros do reparo e comprovantes publicados pela oficina.' : 'Guarde os registros do reparo e os comprovantes deste serviço.'}</Text>
     <Notice text={error} /><Notice text={success} success />
     {!items.length && <Text style={shared.muted}>Nenhum anexo nesta ordem.</Text>}
     {items.map(item => <View key={item.id} style={{ borderTopWidth: 1, borderTopColor: colors.line, paddingTop: 14, gap: 9 }}>
       <View style={shared.row}><Icon name={item.kind === 'foto' ? 'image-outline' : 'document-text-outline'} /><View style={{ flex: 1 }}><Text style={shared.label}>{item.caption}</Text><Text style={shared.muted}>{dateLabel(item.occurredAt.toDate())} · {Math.ceil(item.size / 1024)} KB</Text></View></View>
       <Button title={`Abrir ${item.kind === 'foto' ? 'foto' : 'nota'}: ${item.name}`} variant="secondary" onPress={() => show(item)} />
     </View>)}
-    <Button title="Adicionar anexo" icon="attach-outline" variant="secondary" onPress={() => { setFile(null); setCaption(''); setDate(localDay(new Date())); setModalError(''); setSuccess(''); setOpen(true); }} />
+    {!readOnly && <Button title="Adicionar anexo" icon="attach-outline" variant="secondary" onPress={() => { setFile(null); setCaption(''); setDate(localDay(new Date())); setModalError(''); setSuccess(''); setOpen(true); }} />}
     <FormModal title="Adicionar anexo" visible={open} busy={busy} onClose={() => setOpen(false)}>
       <View style={shared.row}><Chip title="Foto do reparo" selected={kind === 'foto'} onPress={() => { if (!busy) { setKind('foto'); setFile(null); } }} /><Chip title="Nota fiscal" selected={kind === 'nota'} onPress={() => { if (!busy) { setKind('nota'); setFile(null); } }} /></View>
       <Text style={shared.muted}>JPG e PNG; notas também aceitam PDF. Até 5 MB por arquivo.</Text>

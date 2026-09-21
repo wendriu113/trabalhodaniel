@@ -29,6 +29,7 @@ test('migração simula sem escrever, preserva originais e mantém notas antigas
   const migrated = (await db.doc(`serviceOrders/${id}`).get()).data();
   const privateData = (await db.doc(`serviceOrderInternal/${id}`).get()).data();
   assert.equal(migrated.status, 'Pintura'); assert.deepEqual(migrated.history, []);
+  assert.equal(migrated.totalCents, 15000); assert.equal(migrated.paidCents, 0);
   assert.equal(migrated.publicNotes, ''); assert.match(privateData.internalNotes, /NOTA INTERNA ORIGINAL/);
   assert.deepEqual((await db.doc(`users/legacy-admin/orders/${id}`).get()).data(), original);
   await assert.rejects(run(process.execPath, ['scripts/migrate-orders.mjs', 'demo-sgo', file, '--apply'], { env: process.env }), /Destino já existe/);

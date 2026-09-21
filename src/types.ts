@@ -1,9 +1,9 @@
 import type { Timestamp } from 'firebase/firestore';
 
-export const STAGES = ['Veículo recebido', 'Aguardando avaliação', 'Em diagnóstico', 'Aguardando aprovação', 'Aguardando peças', 'Em manutenção', 'Em testes', 'Serviço concluído', 'Pronto para retirada', 'Entregue'] as const;
+export const STAGES = ['Veículo recebido', 'Aguardando peças', 'Em manutenção', 'Serviço concluído', 'Pronto para retirada', 'Entregue'] as const;
 export const LEGACY_STAGES = ['Recebido', 'Chapeamento', 'Preparação', 'Pintura', 'Acabamento', 'Entregue'] as const;
 export const stagesFor = (status: Stage): readonly Stage[] => (LEGACY_STAGES as readonly string[]).includes(status) && status !== 'Entregue' ? LEGACY_STAGES : STAGES;
-export type Stage = typeof STAGES[number] | 'Recebido' | 'Chapeamento' | 'Preparação' | 'Pintura' | 'Acabamento';
+export type Stage = typeof STAGES[number] | typeof LEGACY_STAGES[number] | 'Aguardando avaliação' | 'Em diagnóstico' | 'Aguardando aprovação' | 'Em testes';
 export type Customer = { id: string; name: string; phone: string; ownerUid: string };
 export type Vehicle = { id: string; plate: string; model: string; customerId: string; userId: string };
 export type UserProfile = { role: 'client' | 'admin'; customerId?: string; mustChangePassword?: boolean };
@@ -27,17 +27,20 @@ export type ServiceOrder = {
   deliveryDate: Timestamp | null;
   laborCents: number;
   partsCents: number;
+  totalCents: number;
+  paidCents: number;
   status: Stage;
   history: RepairEvent[];
   createdAt: Timestamp;
   updatedAt: Timestamp;
 };
-export type OrderInput = Omit<ServiceOrder, 'id' | 'status' | 'history' | 'createdAt' | 'updatedAt' | 'createdBy' | 'ownerUid' | 'legacyUid' | 'legacyOrderId'>;
+export type OrderInput = Omit<ServiceOrder, 'id' | 'status' | 'history' | 'createdAt' | 'updatedAt' | 'createdBy' | 'ownerUid' | 'legacyUid' | 'legacyOrderId' | 'totalCents' | 'paidCents'>;
 export type Movement = {
   id: string;
   kind: 'receita' | 'despesa';
   description: string;
   amountCents: number;
+  orderId?: string;
   occurredAt: Timestamp;
   createdAt: Timestamp;
 };

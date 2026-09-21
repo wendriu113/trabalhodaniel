@@ -14,15 +14,15 @@ service cloud.firestore {
     match /{path=**}/orders/{id} { allow read: if admin(); }
     function stage(value) { return value in ['Recebido','Chapeamento','Preparação','Pintura','Acabamento','Entregue','Veículo recebido','Aguardando avaliação','Em diagnóstico','Aguardando aprovação','Aguardando peças','Em manutenção','Em testes','Serviço concluído','Pronto para retirada']; }
     function validOrder(d) {
-      return d.keys().hasAll(['customerId','vehicleId','ownerUid','createdBy','vehicle','plate','entryDate','deliveryDate','status','publicNotes','history','createdAt','updatedAt'])
-        && d.keys().hasOnly(['customerId','vehicleId','ownerUid','createdBy','vehicle','plate','entryDate','deliveryDate','status','publicNotes','history','createdAt','updatedAt'])
+      return d.keys().hasAll(['customerId','vehicleId','ownerUid','createdBy','vehicle','plate','entryDate','deliveryDate','status','publicNotes','history','totalCents','paidCents','createdAt','updatedAt'])
+        && d.keys().hasOnly(['customerId','vehicleId','ownerUid','createdBy','vehicle','plate','entryDate','deliveryDate','status','publicNotes','history','totalCents','paidCents','createdAt','updatedAt'])
         && text(d.customerId,1,128) && text(d.vehicleId,1,128) && d.ownerUid is string
         && exists(/databases/$(database)/documents/customers/$(d.customerId))
         && get(/databases/$(database)/documents/vehicles/$(d.vehicleId)).data.customerId == d.customerId
         && d.plate == get(/databases/$(database)/documents/vehicles/$(d.vehicleId)).data.plate
         && text(d.vehicle,2,160) && stage(d.status) && text(d.publicNotes,0,2000)
         && d.entryDate is timestamp && (d.deliveryDate == null || (d.deliveryDate is timestamp && d.deliveryDate >= d.entryDate))
-        && d.history is list && d.history.size() <= 100
+        && d.history is list && d.history.size() <= 100 && cents(d.totalCents) && cents(d.paidCents) && d.paidCents <= d.totalCents
         && d.createdAt is timestamp && d.updatedAt == request.time;
     }
     match /users/{uid} {
@@ -32,7 +32,9 @@ service cloud.firestore {
         allow read: if admin();
         allow write: if false;
         match /attachments/{attachmentId} {
-          allow read: if admin();
+          allow read: if admin()
+            || (exists(/databases/$(database)/documents/serviceOrders/$(orderId))
+              && clientOf(get(/databases/$(database)/documents/serviceOrders/$(orderId)).data.customerId));
           allow create: if admin() && (exists(/databases/$(database)/documents/users/$(uid)/orders/$(orderId)) || exists(/databases/$(database)/documents/serviceOrders/$(orderId)))
             && request.resource.data.keys().hasAll(['kind','name','caption','storagePath','contentType','size','occurredAt','createdAt'])
             && request.resource.data.keys().hasOnly(['kind','name','caption','storagePath','contentType','size','occurredAt','createdAt'])
@@ -50,9 +52,10 @@ service cloud.firestore {
         allow read: if admin();
         allow create: if admin() && request.auth.uid == uid
           && request.resource.data.keys().hasAll(['kind','description','amountCents','occurredAt','createdAt'])
-          && request.resource.data.keys().hasOnly(['kind','description','amountCents','occurredAt','createdAt'])
+          && request.resource.data.keys().hasOnly(['kind','description','amountCents','orderId','occurredAt','createdAt'])
           && request.resource.data.kind in ['receita','despesa']
           && text(request.resource.data.description,3,200) && cents(request.resource.data.amountCents) && request.resource.data.amountCents > 0
+          && (!request.resource.data.keys().hasAny(['orderId']) || (request.resource.data.orderId is string && exists(/databases/$(database)/documents/serviceOrders/$(request.resource.data.orderId))))
           && request.resource.data.occurredAt is timestamp && request.resource.data.createdAt == request.time;
         allow update, delete: if false;
       }
@@ -63,7 +66,7 @@ service cloud.firestore {
     match /serviceOrders/{id} {
       allow read: if admin() || clientOf(resource.data.customerId);
       allow create: if admin() && validOrder(request.resource.data) && request.resource.data.createdBy == request.auth.uid
-        && request.resource.data.createdAt == request.time && request.resource.data.history.size() == 0;
+        && request.resource.data.createdAt == request.time && request.resource.data.history.size() == 0 && request.resource.data.paidCents == 0;
       allow update: if admin() && validOrder(request.resource.data)
         && request.resource.data.customerId == resource.data.customerId && request.resource.data.vehicleId == resource.data.vehicleId
         && request.resource.data.ownerUid == resource.data.ownerUid && request.resource.data.createdBy == resource.data.createdBy

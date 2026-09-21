@@ -5,7 +5,7 @@ import { collection, doc, getDoc, getDocs, query, where, setDoc, updateDoc, Time
 import { getBytes, ref, uploadBytes } from 'firebase/storage';
 let env: RulesTestEnvironment;
 const date = Timestamp.fromDate(new Date(2026, 8, 19, 12));
-const publicOrder = () => ({ customerId: 'c1', vehicleId: 'ABC1D23', ownerUid: 'alice', createdBy: 'admin', vehicle: 'Onix', plate: 'ABC1D23', entryDate: date, deliveryDate: date, status: 'Veículo recebido', publicNotes: '', history: [], createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
+const publicOrder = () => ({ customerId: 'c1', vehicleId: 'ABC1D23', ownerUid: 'alice', createdBy: 'admin', vehicle: 'Onix', plate: 'ABC1D23', entryDate: date, deliveryDate: date, status: 'Veículo recebido', publicNotes: '', history: [], totalCents: 40000, paidCents: 0, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
 const internal = { customerName: 'Ana Souza', phone: '51999999999', description: 'Reparar pintura', laborCents: 30000, partsCents: 10000, internalNotes: 'Custo interno confidencial' };
 const admin = () => env.authenticatedContext('admin', { admin: true }).firestore();
 before(async () => {
@@ -107,11 +107,17 @@ test('financeiro e documentos legados não ficam disponíveis a clientes', async
   await assertSucceeds(setDoc(ref, movement));
   await assertFails(setDoc(ref, { ...movement, amountCents: -1 }));
   await assertFails(getDoc(doc(env.authenticatedContext('alice').firestore(), 'users/admin/movements/m1')));
+  await setDoc(doc(db, 'serviceOrders/os1'), publicOrder());
+  const payment = writeBatch(db);
+  payment.update(doc(db, 'serviceOrders/os1'), { paidCents: 20000, updatedAt: serverTimestamp() });
+  payment.set(doc(db, 'users/admin/movements/payment'), { ...movement, orderId: 'os1' });
+  await assertSucceeds(payment.commit());
+  await assertFails(updateDoc(doc(db, 'serviceOrders/os1'), { paidCents: 50000, updatedAt: serverTimestamp() }));
   await env.withSecurityRulesDisabled(context => setDoc(doc(context.firestore(), 'users/alice/orders/legacy'), internal));
   await assertSucceeds(getDoc(doc(db, 'users/alice/orders/legacy')));
   await assertFails(getDoc(doc(env.authenticatedContext('alice').firestore(), 'users/alice/orders/legacy')));
 });
-test('anexos e Storage somente para administradores; tamanho e tipos continuam validados', async () => {
+test('cliente vinculado lê anexos, mas somente administradores enviam; tamanho e tipos continuam validados', async () => {
   const storage = env.authenticatedContext('admin', { admin: true }).storage();
   const path = 'users/admin/orders/os1/photo';
   await assertSucceeds(uploadBytes(ref(storage, path), new Uint8Array([1, 2]), { contentType: 'image/jpeg' }));
@@ -123,5 +129,9 @@ test('anexos e Storage somente para administradores; tamanho e tipos continuam v
   const db = admin(); await setDoc(doc(db, 'serviceOrders/os1'), publicOrder());
   const attachment = { kind: 'foto', name: 'reparo.jpg', caption: 'Antes do reparo', storagePath: path, contentType: 'image/jpeg', size: 100, occurredAt: date, createdAt: serverTimestamp() };
   await assertSucceeds(setDoc(doc(db, 'users/admin/orders/os1/attachments/photo'), attachment));
-  await assertFails(getDoc(doc(env.authenticatedContext('alice').firestore(), 'users/admin/orders/os1/attachments/photo')));
+  await assertSucceeds(getDoc(doc(env.authenticatedContext('alice').firestore(), 'users/admin/orders/os1/attachments/photo')));
+  await assertSucceeds(getBytes(ref(env.authenticatedContext('alice').storage(), path)));
+  await assertFails(getDoc(doc(env.authenticatedContext('bob').firestore(), 'users/admin/orders/os1/attachments/photo')));
+  await assertFails(getBytes(ref(env.authenticatedContext('bob').storage(), path)));
+  await assertFails(setDoc(doc(env.authenticatedContext('alice').firestore(), 'users/admin/orders/os1/attachments/client'), attachment));
 });

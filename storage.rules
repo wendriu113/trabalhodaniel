@@ -3,7 +3,15 @@ service firebase.storage {
   match /b/{bucket}/o {
     match /users/{uid}/orders/{orderId}/{attachmentId} {
       function owner() { return request.auth != null && request.auth.token.get('admin', false) == true; }
-      allow read: if owner();
+      function clientOfOrder() {
+        return request.auth != null
+          && firestore.exists(/databases/(default)/documents/serviceOrders/$(orderId))
+          && firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'client'
+          && firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.mustChangePassword == false
+          && request.auth.token.get('auth_time', 0) >= firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.get('credentialsValidAfter', 0)
+          && firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.customerId == firestore.get(/databases/(default)/documents/serviceOrders/$(orderId)).data.customerId;
+      }
+      allow read: if owner() || clientOfOrder();
       allow create: if owner()
         && request.resource.size > 0 && request.resource.size <= 5 * 1024 * 1024
         && request.resource.contentType.matches('image/(jpeg|png)|application/pdf');

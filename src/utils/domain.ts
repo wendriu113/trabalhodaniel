@@ -40,6 +40,8 @@ export function parseLocalDate(value: string): Date | null {
 }
 export const dateInput = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 export const nextStage = (stage: Stage): Stage | undefined => {
+  const removedNext: Partial<Record<Stage, Stage>> = { 'Aguardando avaliação': 'Aguardando peças', 'Em diagnóstico': 'Aguardando peças', 'Aguardando aprovação': 'Aguardando peças', 'Em testes': 'Serviço concluído' };
+  if (removedNext[stage]) return removedNext[stage];
   const legacy = ['Recebido', 'Chapeamento', 'Preparação', 'Pintura', 'Acabamento', 'Entregue'] as const;
   const stages: readonly Stage[] = legacy.includes(stage as typeof legacy[number]) && stage !== 'Entregue' ? legacy : STAGES;
   return stages[stages.indexOf(stage) + 1];

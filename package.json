@@ -13,7 +13,9 @@
     "test": "tsx --test tests/domain.test.ts",
     "test:rules": "firebase emulators:exec --project demo-sgo --only firestore,storage \"tsx --test tests/rules.test.ts\"",
     "test:e2e": "playwright test",
-    "emulators": "firebase emulators:start --project demo-sgo --only auth,firestore,storage,functions",
+    "emulators": "node scripts/start-emulators.mjs",
+    "seed:admin": "node scripts/seed-admin.mjs",
+    "test:admin": "tsx --test tests/admin-login.test.ts",
     "test:backend": "firebase emulators:exec --project demo-sgo --only auth,firestore,functions \"tsx --test tests/backend.test.ts tests/migration.test.ts\"",
     "export:web": "expo export --platform web"
   },

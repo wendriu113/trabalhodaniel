@@ -8,7 +8,9 @@ test('CPF valida verificadores e nunca aceita sequências repetidas', () => {
   assert.equal(validCpf('529.982.247-25'), true);
   for (const cpf of ['11111111111', '00000000000', '52998224724', '1234567890', '5299822472x']) assert.equal(validCpf(cpf), false);
   assert.equal(plateEmail('abc-1d23'), 'abc1d23@clientes.sgo.invalid');
-  assert.equal(nextStage('Veículo recebido'), 'Aguardando avaliação');
+  assert.equal(nextStage('Veículo recebido'), 'Aguardando peças');
+  assert.equal(nextStage('Em diagnóstico'), 'Aguardando peças');
+  assert.equal(nextStage('Em testes'), 'Serviço concluído');
 });
 
 test('valores monetários em pt-BR são convertidos para centavos exatos', () => {

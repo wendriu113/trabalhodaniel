@@ -4,7 +4,7 @@ const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { randomUUID } = require('node:crypto');
 const { setTimeout: delay } = require('node:timers/promises');
-const { normalizePlate, normalizeCpf, validCpf, validPlate, plateEmail } = require('./validation');
+const { normalizePlate, validPlate, plateEmail } = require('./validation');
 initializeApp();
 const db = getFirestore();
 const auth = getAuth();
@@ -62,8 +62,9 @@ exports.saveVehicle = onCall(options, async request => {
 exports.provisionClient = onCall(options, async request => {
   admin(request);
   const data = request.data ?? {};
-  const plate = normalizePlate(data.plate), cpf = normalizeCpf(data.cpf);
-  if (!validPlate(plate) || !validCpf(cpf)) throw new HttpsError('invalid-argument', 'Confira a placa e o CPF válido.');
+  const plate = normalizePlate(data.plate), password = data.password;
+  if (!validPlate(plate)) throw new HttpsError('invalid-argument', 'Confira a placa.');
+  if (typeof password !== 'string' || password.trim().length < 6 || password.trim().length > 128) throw new HttpsError('invalid-argument', 'Informe uma senha inicial de 6 a 128 caracteres.');
   const customerId = id(data.customerId), vehicleRef = db.doc(`vehicles/${plate}`);
   // Reserve a random UID once. Retries cannot reset passwords or take over an existing Auth account.
   const uid = await db.runTransaction(async tx => {
@@ -76,7 +77,7 @@ exports.provisionClient = onCall(options, async request => {
   });
   let resumed = false;
   try {
-    await auth.createUser({ uid, email: plateEmail(plate), password: cpf, disabled: true });
+    await auth.createUser({ uid, email: plateEmail(plate), password: password.trim(), disabled: true });
   } catch (error) {
     if (error.code === 'auth/uid-already-exists') resumed = true;
     else {
@@ -97,7 +98,7 @@ exports.provisionClient = onCall(options, async request => {
   });
   await auth.updateUser(uid, { disabled: false });
   await vehicleRef.update({ userId: uid, provisioningUid: FieldValue.delete(), updatedAt: FieldValue.serverTimestamp() });
-  return { success: true, resumed }; // Never return CPF/password.
+  return { success: true, resumed }; // Never return passwords.
 });
 
 exports.changeInitialPassword = onCall(options, async request => {
@@ -106,11 +107,11 @@ exports.changeInitialPassword = onCall(options, async request => {
   const profile = await ref.get();
   if (!profile.exists || profile.data().role !== 'client' || !profile.data().mustChangePassword) throw new HttpsError('failed-precondition', 'A troca inicial já foi concluída.');
   const password = request.data?.password;
-  if (typeof password !== 'string' || password.length < 12 || password.length > 128 || !/[A-Za-z]/.test(password) || !/[0-9]/.test(password)) throw new HttpsError('invalid-argument', 'Use de 12 a 128 caracteres, com letras e números.');
+  if (typeof password !== 'string' || password.length < 8 || password.length > 128 || !/[A-Za-z]/.test(password) || !/[0-9]/.test(password)) throw new HttpsError('invalid-argument', 'Use de 8 a 128 caracteres, com letras e números.');
   if (Date.now() / 1000 - request.auth.token.auth_time > 300) throw new HttpsError('unauthenticated', 'Entre novamente antes de trocar a senha.');
   await auth.updateUser(uid, { password });
   await auth.revokeRefreshTokens(uid);
-  // Rules also reject already-issued ID tokens from the initial CPF login.
+  // Rules also reject already-issued ID tokens from the initial password login.
   const credentialsValidAfter = Math.floor(Date.now() / 1000) + 1;
   await ref.update({ mustChangePassword: false, credentialsValidAfter });
   // Auth timestamps have one-second resolution. Do not invite a new login before the cutoff.

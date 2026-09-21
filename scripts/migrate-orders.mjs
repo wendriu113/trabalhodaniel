@@ -23,7 +23,7 @@ for (const item of mapping) {
   const d = old.data();
   const publicData = { customerId: item.customerId, vehicleId: item.vehicleId, ownerUid: customer.data().ownerUid || '', createdBy: item.uid,
     vehicle: d.vehicle, plate: d.plate, entryDate: d.entryDate, deliveryDate: d.deliveryDate, status: d.status,
-    publicNotes: '', history: [], createdAt: d.createdAt, updatedAt: Timestamp.now() };
+    publicNotes: '', history: [], totalCents: d.laborCents + d.partsCents, paidCents: 0, createdAt: d.createdAt, updatedAt: Timestamp.now() };
   // Old notes were not labelled public: keep them private until reviewed by an administrator.
   const internalData = { customerName: d.customerName, phone: d.phone, description: d.description, laborCents: d.laborCents, partsCents: d.partsCents,
     internalNotes: (d.history || []).map(e => `${e.occurredAt.toDate().toISOString()} · ${e.stage}: ${e.note}`).join('\n') };

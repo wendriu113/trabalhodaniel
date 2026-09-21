@@ -15,7 +15,7 @@ function splitInput(input: OrderInput) {
   if (!/^\d{10,11}$/.test(phone)) throw new Error('Informe telefone com DDD.');
   for (const value of [laborCents, partsCents]) if (!Number.isInteger(value) || value < 0 || value > 100000000) throw new Error('Valor inválido.');
   validateDates(input.entryDate.toDate(), input.deliveryDate?.toDate() ?? input.entryDate.toDate());
-  return { publicData, internal: { customerName, phone, description, laborCents, partsCents, internalNotes } };
+  return { publicData: { ...publicData, totalCents: laborCents + partsCents }, internal: { customerName, phone, description, laborCents, partsCents, internalNotes } };
 }
 export async function saveOrder(uid: string, input: OrderInput, id: string, editing = false) {
   await requireAdmin(uid);
@@ -26,8 +26,10 @@ export async function saveOrder(uid: string, input: OrderInput, id: string, edit
     if (!customer.exists() || !vehicle.exists() || vehicle.data().customerId !== input.customerId) throw new Error('Cadastre o cliente e associe o veículo antes de salvar.');
     if (editing && !existing.exists()) throw new Error('Ordem não encontrada.');
     if (!editing && existing.exists()) return; // Stable ID makes retries idempotent.
-    if (editing) tx.update(ref, { ...publicData, updatedAt: serverTimestamp() });
-    else tx.set(ref, { ...publicData, ownerUid: customer.data().ownerUid || '', createdBy: uid, status: 'Veículo recebido', history: [], createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
+    if (editing) {
+      if (publicData.totalCents < (existing.data()?.paidCents || 0)) throw new Error('O total não pode ser menor que o valor já pago.');
+      tx.update(ref, { ...publicData, updatedAt: serverTimestamp() });
+    } else tx.set(ref, { ...publicData, paidCents: 0, ownerUid: customer.data().ownerUid || '', createdBy: uid, status: 'Veículo recebido', history: [], createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
     tx.set(doc(db, 'serviceOrderInternal', id), internal);
   });
   return id;
@@ -60,3 +62,18 @@ export async function createMovement(uid: string, id: string, kind: 'receita' | 
   await runTransaction(firebase().db, async tx => { if (!(await tx.get(ref)).exists()) tx.set(ref, { ...input, createdAt: serverTimestamp() }); });
 }
 export const newMovementId = (uid: string) => doc(collection(firebase().db, 'users', uid, 'movements')).id;
+export async function registerOrderPayment(uid: string, orderId: string, movementId: string, description: string, amountCents: number, date: Date) {
+  await requireAdmin(uid);
+  if (!Number.isInteger(amountCents) || amountCents <= 0) throw new Error('Informe um valor de pagamento maior que zero.');
+  const db = firebase().db, orderRef = doc(db, 'serviceOrders', orderId), movementRef = doc(db, 'users', uid, 'movements', movementId);
+  const cleanDescription = requireText(description, 'Descrição', 3, 200);
+  await runTransaction(db, async tx => {
+    const [order, movement] = await Promise.all([tx.get(orderRef), tx.get(movementRef)]);
+    if (!order.exists()) throw new Error('A ordem não foi encontrada.');
+    if (movement.exists()) return;
+    const current = order.data() as ServiceOrder, paidCents = (current.paidCents || 0) + amountCents;
+    if (paidCents > current.totalCents) throw new Error('O pagamento não pode ser maior que o saldo da ordem.');
+    tx.update(orderRef, { paidCents, updatedAt: serverTimestamp() });
+    tx.set(movementRef, { kind: 'receita', orderId, description: cleanDescription, amountCents, occurredAt: Timestamp.fromDate(date), createdAt: serverTimestamp() });
+  });
+}
