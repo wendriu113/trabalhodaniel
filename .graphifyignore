@@ -1,0 +1,18 @@
+# Focus on project sources; omit dependencies, generated artifacts and secrets.
+node_modules/
+functions/node_modules/
+.agents/
+.codex/
+.cache/
+.expo/
+dist/
+dist-native/
+test-results/
+playwright-report/
+graphify-out/
+docs/screenshots/
+.env*
+*-debug.log
+package-lock.json
+functions/package-lock.json
+skills-lock.json

@@ -1,0 +1,54 @@
+import type { Timestamp } from 'firebase/firestore';
+
+export const STAGES = ['Veículo recebido', 'Aguardando avaliação', 'Em diagnóstico', 'Aguardando aprovação', 'Aguardando peças', 'Em manutenção', 'Em testes', 'Serviço concluído', 'Pronto para retirada', 'Entregue'] as const;
+export const LEGACY_STAGES = ['Recebido', 'Chapeamento', 'Preparação', 'Pintura', 'Acabamento', 'Entregue'] as const;
+export const stagesFor = (status: Stage): readonly Stage[] => (LEGACY_STAGES as readonly string[]).includes(status) && status !== 'Entregue' ? LEGACY_STAGES : STAGES;
+export type Stage = typeof STAGES[number] | 'Recebido' | 'Chapeamento' | 'Preparação' | 'Pintura' | 'Acabamento';
+export type Customer = { id: string; name: string; phone: string; ownerUid: string };
+export type Vehicle = { id: string; plate: string; model: string; customerId: string; userId: string };
+export type UserProfile = { role: 'client' | 'admin'; customerId?: string; mustChangePassword?: boolean };
+export type RepairEvent = { stage: Stage; note: string; occurredAt: Timestamp };
+export type ServiceOrder = {
+  id: string;
+  customerId: string;
+  vehicleId: string;
+  ownerUid: string;
+  createdBy: string;
+  publicNotes: string;
+  internalNotes: string;
+  legacyUid?: string;
+  legacyOrderId?: string;
+  customerName: string;
+  phone: string;
+  vehicle: string;
+  plate: string;
+  description: string;
+  entryDate: Timestamp;
+  deliveryDate: Timestamp | null;
+  laborCents: number;
+  partsCents: number;
+  status: Stage;
+  history: RepairEvent[];
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+};
+export type OrderInput = Omit<ServiceOrder, 'id' | 'status' | 'history' | 'createdAt' | 'updatedAt' | 'createdBy' | 'ownerUid' | 'legacyUid' | 'legacyOrderId'>;
+export type Movement = {
+  id: string;
+  kind: 'receita' | 'despesa';
+  description: string;
+  amountCents: number;
+  occurredAt: Timestamp;
+  createdAt: Timestamp;
+};
+export type Attachment = {
+  id: string;
+  kind: 'foto' | 'nota';
+  name: string;
+  caption: string;
+  storagePath: string;
+  contentType: string;
+  size: number;
+  occurredAt: Timestamp;
+  createdAt: Timestamp;
+};

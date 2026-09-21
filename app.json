@@ -1,0 +1,32 @@
+{
+  "expo": {
+    "name": "SGO · Oficina",
+    "slug": "sgo-oficina",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.academico.sgo"
+    },
+    "android": {
+      "package": "com.academico.sgo"
+    },
+    "web": {
+      "bundler": "metro",
+      "name": "SGO · Oficina"
+    },
+    "plugins": [
+      "@react-native-community/datetimepicker",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Permita que o SGO selecione fotos do reparo.",
+          "cameraPermission": false,
+          "microphonePermission": false
+        }
+      ],
+      "expo-document-picker"
+    ]
+  }
+}

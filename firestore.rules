@@ -1,0 +1,95 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function admin() { return request.auth != null && request.auth.token.get('admin', false) == true; }
+    function clientOf(customerId) {
+      return request.auth != null
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'client'
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.mustChangePassword == false
+        && request.auth.token.get('auth_time', 0) >= get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('credentialsValidAfter', 0)
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.customerId == customerId;
+    }
+    function text(value, min, max) { return value is string && value.size() >= min && value.size() <= max; }
+    function cents(value) { return value is int && value >= 0 && value <= 100000000; }
+    match /{path=**}/orders/{id} { allow read: if admin(); }
+    function stage(value) { return value in ['Recebido','Chapeamento','Preparação','Pintura','Acabamento','Entregue','Veículo recebido','Aguardando avaliação','Em diagnóstico','Aguardando aprovação','Aguardando peças','Em manutenção','Em testes','Serviço concluído','Pronto para retirada']; }
+    function validOrder(d) {
+      return d.keys().hasAll(['customerId','vehicleId','ownerUid','createdBy','vehicle','plate','entryDate','deliveryDate','status','publicNotes','history','createdAt','updatedAt'])
+        && d.keys().hasOnly(['customerId','vehicleId','ownerUid','createdBy','vehicle','plate','entryDate','deliveryDate','status','publicNotes','history','createdAt','updatedAt'])
+        && text(d.customerId,1,128) && text(d.vehicleId,1,128) && d.ownerUid is string
+        && exists(/databases/$(database)/documents/customers/$(d.customerId))
+        && get(/databases/$(database)/documents/vehicles/$(d.vehicleId)).data.customerId == d.customerId
+        && d.plate == get(/databases/$(database)/documents/vehicles/$(d.vehicleId)).data.plate
+        && text(d.vehicle,2,160) && stage(d.status) && text(d.publicNotes,0,2000)
+        && d.entryDate is timestamp && (d.deliveryDate == null || (d.deliveryDate is timestamp && d.deliveryDate >= d.entryDate))
+        && d.history is list && d.history.size() <= 100
+        && d.createdAt is timestamp && d.updatedAt == request.time;
+    }
+    match /users/{uid} {
+      allow read: if admin() || (request.auth != null && request.auth.uid == uid);
+      allow write: if false;
+      match /orders/{orderId} {
+        allow read: if admin();
+        allow write: if false;
+        match /attachments/{attachmentId} {
+          allow read: if admin();
+          allow create: if admin() && (exists(/databases/$(database)/documents/users/$(uid)/orders/$(orderId)) || exists(/databases/$(database)/documents/serviceOrders/$(orderId)))
+            && request.resource.data.keys().hasAll(['kind','name','caption','storagePath','contentType','size','occurredAt','createdAt'])
+            && request.resource.data.keys().hasOnly(['kind','name','caption','storagePath','contentType','size','occurredAt','createdAt'])
+            && request.resource.data.kind in ['foto','nota']
+            && text(request.resource.data.name,1,180) && text(request.resource.data.caption,3,300)
+            && request.resource.data.storagePath == 'users/' + uid + '/orders/' + orderId + '/' + attachmentId
+            && request.resource.data.contentType in ['image/jpeg','image/png','application/pdf']
+            && (request.resource.data.kind == 'nota' || request.resource.data.contentType != 'application/pdf')
+            && request.resource.data.size is int && request.resource.data.size > 0 && request.resource.data.size <= 5242880
+            && request.resource.data.occurredAt is timestamp && request.resource.data.createdAt == request.time;
+          allow update, delete: if false;
+        }
+      }
+      match /movements/{movementId} {
+        allow read: if admin();
+        allow create: if admin() && request.auth.uid == uid
+          && request.resource.data.keys().hasAll(['kind','description','amountCents','occurredAt','createdAt'])
+          && request.resource.data.keys().hasOnly(['kind','description','amountCents','occurredAt','createdAt'])
+          && request.resource.data.kind in ['receita','despesa']
+          && text(request.resource.data.description,3,200) && cents(request.resource.data.amountCents) && request.resource.data.amountCents > 0
+          && request.resource.data.occurredAt is timestamp && request.resource.data.createdAt == request.time;
+        allow update, delete: if false;
+      }
+    }
+    match /customers/{id} { allow read: if admin(); allow write: if false; }
+    match /vehicles/{id} { allow read: if admin(); allow write: if false; }
+    match /customerVehicles/{id} { allow read: if admin() || clientOf(resource.data.customerId); allow write: if false; }
+    match /serviceOrders/{id} {
+      allow read: if admin() || clientOf(resource.data.customerId);
+      allow create: if admin() && validOrder(request.resource.data) && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.createdAt == request.time && request.resource.data.history.size() == 0;
+      allow update: if admin() && validOrder(request.resource.data)
+        && request.resource.data.customerId == resource.data.customerId && request.resource.data.vehicleId == resource.data.vehicleId
+        && request.resource.data.ownerUid == resource.data.ownerUid && request.resource.data.createdBy == resource.data.createdBy
+        && request.resource.data.createdAt == resource.data.createdAt;
+      allow delete: if false;
+    }
+    match /serviceOrderInternal/{id} {
+      allow read: if admin();
+      allow create, update: if admin() && existsAfter(/databases/$(database)/documents/serviceOrders/$(id))
+        && request.resource.data.keys().hasAll(['customerName','phone','description','laborCents','partsCents','internalNotes'])
+        && request.resource.data.keys().hasOnly(['customerName','phone','description','laborCents','partsCents','internalNotes'])
+        && text(request.resource.data.customerName,2,160) && request.resource.data.phone.matches('^[0-9]{10,11}$')
+        && text(request.resource.data.description,5,2000) && text(request.resource.data.internalNotes,0,4000)
+        && cents(request.resource.data.laborCents) && cents(request.resource.data.partsCents);
+      allow delete: if false;
+    }
+    match /serviceOrderUpdates/{id} {
+      allow read: if admin() || clientOf(resource.data.customerId);
+      allow create: if admin()
+        && request.resource.data.keys().hasAll(['orderId','customerId','createdBy','status','publicNotes','occurredAt','createdAt'])
+        && request.resource.data.keys().hasOnly(['orderId','customerId','createdBy','status','publicNotes','occurredAt','createdAt'])
+        && request.resource.data.customerId == getAfter(/databases/$(database)/documents/serviceOrders/$(request.resource.data.orderId)).data.customerId
+        && request.resource.data.status == getAfter(/databases/$(database)/documents/serviceOrders/$(request.resource.data.orderId)).data.status
+        && request.resource.data.createdBy == request.auth.uid && stage(request.resource.data.status)
+        && text(request.resource.data.publicNotes,0,2000) && request.resource.data.occurredAt is timestamp && request.resource.data.createdAt == request.time;
+      allow update, delete: if false;
+    }
+  }
+}

@@ -1,0 +1,15 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /users/{uid}/orders/{orderId}/{attachmentId} {
+      function owner() { return request.auth != null && request.auth.token.get('admin', false) == true; }
+      allow read: if owner();
+      allow create: if owner()
+        && request.resource.size > 0 && request.resource.size <= 5 * 1024 * 1024
+        && request.resource.contentType.matches('image/(jpeg|png)|application/pdf');
+      // Exclusão usada para limpar um upload cujo registro no Firestore falhou.
+      allow delete: if owner();
+      allow update: if false;
+    }
+  }
+}
