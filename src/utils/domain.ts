@@ -46,6 +46,12 @@ export const nextStage = (stage: Stage): Stage | undefined => {
   const stages: readonly Stage[] = legacy.includes(stage as typeof legacy[number]) && stage !== 'Entregue' ? legacy : STAGES;
   return stages[stages.indexOf(stage) + 1];
 };
+export const clientStage = (stage: Stage): Stage => ({
+  'Aguardando avaliação': 'Veículo recebido',
+  'Em diagnóstico': 'Veículo recebido',
+  'Aguardando aprovação': 'Veículo recebido',
+  'Em testes': 'Em manutenção',
+} as Partial<Record<Stage, Stage>>)[stage] || stage;
 export function summarize(movements: { kind: 'receita' | 'despesa'; amountCents: number }[]) {
   const income = movements.filter(m => m.kind === 'receita').reduce((s, m) => s + m.amountCents, 0);
   const expense = movements.filter(m => m.kind === 'despesa').reduce((s, m) => s + m.amountCents, 0);

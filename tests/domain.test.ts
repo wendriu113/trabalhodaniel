@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseMoney, validPlate, normalizePlate, validateDates, parseLocalDate, dateInput, nextStage, summarize } from '../src/utils/domain';
+import { clientStage, parseMoney, validPlate, normalizePlate, validateDates, parseLocalDate, dateInput, nextStage, summarize } from '../src/utils/domain';
 import { normalizeCpf, validCpf, plateEmail } from '../functions/validation';
 
 test('CPF valida verificadores e nunca aceita sequências repetidas', () => {
@@ -11,6 +11,8 @@ test('CPF valida verificadores e nunca aceita sequências repetidas', () => {
   assert.equal(nextStage('Veículo recebido'), 'Aguardando peças');
   assert.equal(nextStage('Em diagnóstico'), 'Aguardando peças');
   assert.equal(nextStage('Em testes'), 'Serviço concluído');
+  assert.equal(clientStage('Em diagnóstico'), 'Veículo recebido');
+  assert.equal(clientStage('Em testes'), 'Em manutenção');
 });
 
 test('valores monetários em pt-BR são convertidos para centavos exatos', () => {
